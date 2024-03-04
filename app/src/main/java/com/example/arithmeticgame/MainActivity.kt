@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity() {
     var doublePoints = false
     var correctAnswer = 0
     var currentProblemType = ""
+    var attemptingJackpot = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,12 +30,18 @@ class MainActivity : AppCompatActivity() {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+
+        val guessButton: Button = findViewById(R.id.guessButton)
+        guessButton.isEnabled = false
+
         val rollDieButton: Button = findViewById(R.id.rollDieButton)
+        rollDieButton.isEnabled = true
+
         rollDieButton.setOnClickListener {
             rollDie()
         }
-        updateUI()
         setupGuessButtonLogic()
+        updateUI()
     }
 
     private fun updateUI() {
@@ -50,9 +57,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun rollDie() {
-        val dieResult = (1..6).random() // Generate a random number between 1 and 6
-        updateDieImage(dieResult) // A method to update the die image based on the roll
-        handleDieRoll(dieResult) // Handle the logic based on the die result
+        val dieResult = (1..6).random()
+        updateDieImage(dieResult)
+
+        val guessButton: Button = findViewById(R.id.guessButton)
+        val rollDieButton: Button = findViewById(R.id.rollDieButton)
+
+        // Enabling guess button for problems requiring a guess
+        if (dieResult in 1..3 || dieResult == 6) {
+            guessButton.isEnabled = true
+            rollDieButton.isEnabled = false // Ensure user cannot roll again before guessing
+        } else if (dieResult == 5) { // Lose a turn, directly switch players
+            switchPlayer()
+        } else if (dieResult == 4) { // Double points, but still needs to roll again
+            guessButton.isEnabled = false // No guessing required for double points directly
+        }
+
+        handleDieRoll(dieResult)
     }
 
     fun updateDieImage(dieResult: Int) {
@@ -77,14 +98,17 @@ class MainActivity : AppCompatActivity() {
             4 -> {
                 doublePoints = true
                 problemTextView.text = "Roll again for double points!"
+
             }
             5 -> {
                 currentProblemType = "lose a turn"
                 problemTextView.text = "Lose a turn!"
                 switchPlayer()
+
             }
             6 -> {
                 currentProblemType = "jackpot"
+                attemptingJackpot = true // Indicate that a jackpot attempt is in progress
                 problemTextView.text = "Try for jackpot!"
                 generateProblem(listOf("addition", "subtraction", "multiplication").random())
             }
@@ -92,8 +116,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun generateProblem(operation: String) {
-        val number1: Int
-        val number2: Int
+        var number1: Int
+        var number2: Int
         val problemTextView: TextView = findViewById(R.id.problemTextView)
 
         when (operation) {
@@ -107,6 +131,15 @@ class MainActivity : AppCompatActivity() {
             "subtraction" -> {
                 number1 = (0..99).random()
                 number2 = (0..99).random()
+
+                // Ensure number1 is always greater than or equal to number2
+                if (number1 < number2) {
+                    // Swap numbers if number2 is greater than number1
+                    val temp = number1
+                    number1 = number2
+                    number2 = temp
+                }
+
                 correctAnswer = number1 - number2
                 problemTextView.text = "$number1 - $number2 = ?"
                 currentProblemType = "subtraction"
@@ -135,25 +168,32 @@ class MainActivity : AppCompatActivity() {
                         "addition" -> pointsAwarded = 1
                         "subtraction" -> pointsAwarded = 2
                         "multiplication" -> pointsAwarded = 3
-                        "jackpot" -> pointsAwarded = jackpotAmount
                     }
 
-                    if (doublePoints && currentProblemType != "jackpot") {
-                        pointsAwarded *= 2 // Double points for a correct answer under double points condition
-                        doublePoints = false
-                    }
-
-                    updateScore(pointsAwarded)
-                    if (currentProblemType == "jackpot") {
-                        problemTextView.text = "Jackpot won! Points earned: $pointsAwarded"
+                    if (attemptingJackpot) {
+                        pointsAwarded = jackpotAmount
+                        Toast.makeText(this, "Jackpot won! Points earned: $pointsAwarded", Toast.LENGTH_LONG).show()
                         jackpotAmount = 5 // Reset the jackpot
-                    } else {
+                        attemptingJackpot = false // Reset the flag indicating a jackpot attempt
+                    }else {
+                        if (doublePoints) {
+                            pointsAwarded *= 2 // Double points for a correct answer under double points condition
+                            doublePoints = false
+                        }
                         Toast.makeText(this, "Correct! Points earned: $pointsAwarded", Toast.LENGTH_SHORT).show()
                     }
+                    updateScore(pointsAwarded)
                 } else {
                     Toast.makeText(this, "Incorrect. The correct answer was $correctAnswer", Toast.LENGTH_SHORT).show()
-                    if (currentProblemType != "jackpot") {
-                        jackpotAmount += pointsAwarded // Add to the jackpot the points that would have been earned
+                    val missedPoints = when (currentProblemType) {
+                        "addition" -> 1
+                        "subtraction" -> 2
+                        "multiplication" -> 3
+                        else -> 0 // No points missed for incorrect jackpot attempt
+                    }
+                    if (attemptingJackpot) {
+                        attemptingJackpot = false
+                        jackpotAmount += missedPoints // Correctly increment the jackpot based on the missed question
                     }
                 }
 
@@ -180,7 +220,14 @@ class MainActivity : AppCompatActivity() {
 
     fun switchPlayer() {
         currentPlayer = if (currentPlayer == "P1") "P2" else "P1"
-        updateUI() // Make sure this updates the currentPlayer TextView among others
+
+        val rollDieButton: Button = findViewById(R.id.rollDieButton)
+        rollDieButton.isEnabled = true // Re-enable for the next player's turn
+
+        val guessButton: Button = findViewById(R.id.guessButton)
+        guessButton.isEnabled = false // Disable guessing until the die is rolled again
+
+        updateUI()
     }
 
     fun checkWinCondition() {
@@ -203,3 +250,4 @@ class MainActivity : AppCompatActivity() {
     }
 
 }
+
