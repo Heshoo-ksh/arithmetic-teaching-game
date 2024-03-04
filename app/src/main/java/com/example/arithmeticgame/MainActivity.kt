@@ -14,11 +14,11 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : AppCompatActivity() {
     var player1Score = 0
     var player2Score = 0
-    var jackpotAmount = 0
+    var jackpotAmount = 5
     var currentPlayer = "P1"
-    var correctAnswer = 0
     var doublePoints = false
-    var tryingForJackpot = false
+    var correctAnswer = 0
+    var currentProblemType = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,9 +38,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateUI() {
+        val player1TotalTextView: TextView = findViewById(R.id.player1Total)
+        val player2TotalTextView: TextView = findViewById(R.id.player2Total)
         val jackpotTextView: TextView = findViewById(R.id.currentJackpot)
         val currentPlayerTextView: TextView = findViewById(R.id.currentPlayer)
 
+        player1TotalTextView.text = "Player 1 total: $player1Score"
+        player2TotalTextView.text = "Player 2 total: $player2Score"
         jackpotTextView.text = "Current Jackpot: $jackpotAmount"
         currentPlayerTextView.text = "Current Player: $currentPlayer"
     }
@@ -75,10 +79,12 @@ class MainActivity : AppCompatActivity() {
                 problemTextView.text = "Roll again for double points!"
             }
             5 -> {
+                currentProblemType = "lose a turn"
                 problemTextView.text = "Lose a turn!"
                 switchPlayer()
             }
             6 -> {
+                currentProblemType = "jackpot"
                 problemTextView.text = "Try for jackpot!"
                 generateProblem(listOf("addition", "subtraction", "multiplication").random())
             }
@@ -96,55 +102,69 @@ class MainActivity : AppCompatActivity() {
                 number2 = (0..99).random()
                 correctAnswer = number1 + number2
                 problemTextView.text = "$number1 + $number2 = ?"
+                currentProblemType = "addition"
             }
             "subtraction" -> {
                 number1 = (0..99).random()
                 number2 = (0..99).random()
                 correctAnswer = number1 - number2
                 problemTextView.text = "$number1 - $number2 = ?"
+                currentProblemType = "subtraction"
             }
             "multiplication" -> {
                 number1 = (0..20).random()
                 number2 = (0..20).random()
                 correctAnswer = number1 * number2
                 problemTextView.text = "$number1 * $number2 = ?"
+                currentProblemType = "multiplication"
             }
         }
     }
+
     private fun setupGuessButtonLogic() {
         val guessButton: Button = findViewById(R.id.guessButton)
         guessButton.setOnClickListener {
             val answerInput: EditText = findViewById(R.id.answerInput)
-            val problemTextView: TextView = findViewById(R.id.problemTextView)
             try {
                 val userAnswer = answerInput.text.toString().toInt()
+                var pointsAwarded = 0
+                val problemTextView: TextView = findViewById(R.id.problemTextView)
+
                 if (userAnswer == correctAnswer) {
-                    val pointsAwarded = when {
-                        doublePoints -> 2
-                        problemTextView.text.toString().contains("jackpot", ignoreCase = true) -> jackpotAmount
-                        else -> 1
+                    when (currentProblemType) {
+                        "addition" -> pointsAwarded = 1
+                        "subtraction" -> pointsAwarded = 2
+                        "multiplication" -> pointsAwarded = 3
+                        "jackpot" -> pointsAwarded = jackpotAmount
                     }
+
+                    if (doublePoints && currentProblemType != "jackpot") {
+                        pointsAwarded *= 2 // Double points for a correct answer under double points condition
+                        doublePoints = false
+                    }
+
                     updateScore(pointsAwarded)
-                    if (pointsAwarded == jackpotAmount) {
-                        jackpotAmount = 5 // Reset jackpot after winning
-                        problemTextView.text = "Jackpot won!"
+                    if (currentProblemType == "jackpot") {
+                        problemTextView.text = "Jackpot won! Points earned: $pointsAwarded"
+                        jackpotAmount = 5 // Reset the jackpot
                     } else {
-                        Toast.makeText(this, "Correct!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Correct! Points earned: $pointsAwarded", Toast.LENGTH_SHORT).show()
                     }
-                    doublePoints = false // Reset double points after use
                 } else {
                     Toast.makeText(this, "Incorrect. The correct answer was $correctAnswer", Toast.LENGTH_SHORT).show()
-                    if (!problemTextView.text.toString().contains("jackpot", ignoreCase = true)) {
-                        jackpotAmount += if (doublePoints) 2 else 1 // Add missed points to the jackpot if not a jackpot attempt
+                    if (currentProblemType != "jackpot") {
+                        jackpotAmount += pointsAwarded // Add to the jackpot the points that would have been earned
                     }
-                    doublePoints = false // Reset double points after use
                 }
-                switchPlayer() // Switch player after each guess unless it was a double points attempt
-                updateUI() // Update the UI with new scores and jackpot amount
+
+                if (currentProblemType != "double") {
+                    switchPlayer() // Switch player unless it's a double points condition
+                }
+                updateUI()
             } catch (e: NumberFormatException) {
                 Toast.makeText(this, "Please enter a valid number", Toast.LENGTH_SHORT).show()
             }
-            answerInput.text.clear() // Clear the input field for the next guess
+            answerInput.text.clear()
         }
     }
 
